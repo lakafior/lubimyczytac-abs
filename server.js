@@ -447,7 +447,11 @@ class LubimyCzytacProvider {
   }
 
   stripHtmlTags(html) {
-    return html.replace(/<[^>]*>/g, "");
+    // Remove HTML tags
+    let text = html.replace(/<[^>]*>/g, "");
+    // Fix missing spaces after periods followed by capital letters
+    text = text.replace(/\.([A-ZĄĆĘŁŃÓŚŹŻ])/g, ". $1");
+    return text;
   }
 
   enrichDescription(description, pages, publishedDate, translator) {

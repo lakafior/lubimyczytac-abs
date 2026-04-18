@@ -275,7 +275,7 @@ class LubimyCzytacProvider {
       const languages =
         $('dt:contains("Język:")').next("dd").text().trim().split(", ") || [];
       const description =
-        $(".collapse-content").html() ||
+        $("#book-description").html() ||
         $('meta[property="og:description"]').attr("content") ||
         "";
       const seriesElement = $('span.d-none.d-sm-block.mt-1:contains("Cykl:")')

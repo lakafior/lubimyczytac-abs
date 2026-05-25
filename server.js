@@ -220,28 +220,28 @@ class LubimyCzytacProvider {
     const $ = cheerio.load(decodedData);
     const matches = [];
 
-    $(".authorAllBooks__single").each((index, element) => {
+    $(".book-card--l").each((index, element) => {
       const $book = $(element);
-      const $bookInfo = $book.find(".authorAllBooks__singleText");
 
-      const title = $bookInfo
-        .find(".authorAllBooks__singleTextTitle")
-        .text()
-        .trim();
-      const bookUrl = $bookInfo
-        .find(".authorAllBooks__singleTextTitle")
-        .attr("href");
-      const authors = $bookInfo
-        .find('a[href*="/autor/"]')
+      const title = $book.find(".book-card__title").text().trim();
+      const bookUrl = $book.find(".book-card__title").attr("href");
+      const authors = $book
+        .find(".book-card__author a")
         .map((i, el) => $(el).text().trim())
         .get();
 
+      const bookId =
+        $book.attr("data-book-id") ||
+        (bookUrl ? bookUrl.split("/").filter(Boolean)[1] : null);
+
       if (title && bookUrl) {
         matches.push({
-          id: bookUrl.split("/").pop(),
+          id: bookId,
           title: this.decodeUnicode(title),
           authors: authors.map((author) => this.decodeUnicode(author)),
-          url: `${this.baseUrl}${bookUrl}`,
+          url: bookUrl.startsWith("http")
+            ? bookUrl
+            : `${this.baseUrl}${bookUrl}`,
           type: type,
           source: {
             id: this.id,
@@ -264,13 +264,13 @@ class LubimyCzytacProvider {
       const $ = cheerio.load(decodedData);
 
       const cover =
-        $(".book-cover a").attr("data-cover") ||
-        $(".book-cover source").attr("srcset") ||
-        $(".book-cover img").attr("src") ||
+        $("a#js-lightboxCover").attr("href") ||
+        $(".book-cover__link").attr("href") ||
         $('meta[property="og:image"]').attr("content") ||
         "";
       const publisher =
-        $('dt:contains("Wydawnictwo:")').next("dd").find("a").text().trim() ||
+        $('span.book__txt:contains("Wydawnictwo:")').find("a").text().trim() ||
+        $("[data-ga-book-publishers]").attr("data-ga-book-publishers") ||
         "";
       const languages =
         $('dt:contains("Język:")').next("dd").text().trim().split(", ") || [];

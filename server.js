@@ -15,6 +15,10 @@ app.use(cors());
 app.use((req, res, next) => {
   const apiKey = req.headers["authorization"];
   if (!apiKey) {
+    console.warn(
+      `[Unauthorized] Missing authorization header. Available headers:`,
+      req.headers,
+    );
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
@@ -222,6 +226,13 @@ class LubimyCzytacProvider {
 
     $(".book-card--l").each((index, element) => {
       const $book = $(element);
+
+      // Skip promoted offers / reklam
+      if (
+        $book.closest(".promoted-offers__list, .promoted-offers").length > 0
+      ) {
+        return;
+      }
 
       const title = $book.find(".book-card__title").text().trim();
       const bookUrl = $book.find(".book-card__title").attr("href");

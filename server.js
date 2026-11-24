@@ -356,8 +356,8 @@ class LubimyCzytacProvider {
 
   extractSeriesIndex(seriesElement) {
     if (!seriesElement) return null;
-    const match = seriesElement.match(/\(tom (\d+)/);
-    return match ? parseInt(match[1]) : null;
+    const match = seriesElement.match(/\(tom (\d+(?:\.\d+)?)/);
+    return match ? match[1] : null;
   }
 
   extractPublishedDate($) {

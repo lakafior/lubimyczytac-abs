@@ -274,14 +274,32 @@ class LubimyCzytacProvider {
       const decodedData = this.decodeText(response.data);
       const $ = cheerio.load(decodedData);
 
+      // The page's schema.org Book/Audiobook node: a fallback for what the HTML lacks.
+      const book = this.bookJsonLd($);
+
+      // An audiobook's og:image is the site's logo, not a cover: no cover is better than the logo.
       const cover =
-        $("a#js-lightboxCover").attr("href") ||
-        $(".book-cover__link").attr("href") ||
-        $('meta[property="og:image"]').attr("content") ||
+        this.realCover($("a#js-lightboxCover").attr("href")) ||
+        this.realCover($(".book-cover__link").attr("href")) ||
+        this.realCover(typeof book.image === "string" ? book.image : "") ||
+        this.realCover($('meta[property="og:image"]').attr("content")) ||
         "";
+      // Several publishers are several links ("Fonopolis, superNOWA"): join them, don't glue them.
       const publisher =
-        $('span.book__txt:contains("Wydawnictwo:")').find("a").text().trim() ||
+        [
+          ...new Set(
+            $('span.book__txt:contains("Wydawnictwo:")')
+              .first()
+              .find("a")
+              .map((i, el) => $(el).text().trim())
+              .get()
+              .filter(Boolean),
+          ),
+        ].join(", ") ||
         $("[data-ga-book-publishers]").attr("data-ga-book-publishers") ||
+        (book.publisher && typeof book.publisher.name === "string"
+          ? book.publisher.name
+          : "") ||
         "";
       const languages =
         $('dt:contains("Język:")').next("dd").text().trim().split(", ") || [];
@@ -293,18 +311,37 @@ class LubimyCzytacProvider {
         .find("a")
         .text()
         .trim();
-      const series = this.extractSeriesName(seriesElement);
-      const seriesIndex = this.extractSeriesIndex(seriesElement);
+      // A "/cykl/" is the author's cycle; a "/seria/" is only the publisher's imprint.
+      const seriesPart = []
+        .concat(book.isPartOfSeries || [])
+        .find(
+          (s) => s && typeof s.url === "string" && s.url.includes("/cykl/"),
+        );
+      const series =
+        this.extractSeriesName(seriesElement) ||
+        (seriesPart && typeof seriesPart.name === "string"
+          ? seriesPart.name.trim()
+          : null);
+      const seriesIndex =
+        this.extractSeriesIndex(seriesElement) ||
+        (seriesPart && /^\d+(?:\.\d+)?$/.test(String(seriesPart.position))
+          ? String(seriesPart.position)
+          : null);
       const genres = this.extractGenres($);
       const tags = this.extractTags($);
       const rating =
         parseFloat($('meta[property="books:rating:value"]').attr("content")) /
           2 || null;
-      const isbn = $('meta[property="books:isbn"]').attr("content") || "";
+      // Audiobook pages have no books:isbn meta, only the details list.
+      const isbn =
+        this.validIsbn($('meta[property="books:isbn"]').attr("content")) ||
+        this.validIsbn(this.ddText($, "ISBN")) ||
+        this.validIsbn(typeof book.isbn === "string" ? book.isbn : "") ||
+        "";
 
       let publishedDate, pages;
       try {
-        publishedDate = this.extractPublishedDate($);
+        publishedDate = this.extractPublishedDate($, book);
         pages = this.extractPages($);
       } catch (error) {
         console.error(
@@ -360,12 +397,63 @@ class LubimyCzytacProvider {
     return match ? match[1] : null;
   }
 
-  extractPublishedDate($) {
-    const dateText = $('dt[title*="Data pierwszego wydania"]')
+  // The first Polish edition, then the first edition anywhere, then this edition. Each <dt> on its
+  // own: the page lists both first editions, and reading them together glues two dates into one.
+  extractPublishedDate($, book = {}) {
+    const candidates = [
+      $('dt[title="Data pierwszego wydania polskiego"]').first().next("dd").text(),
+      this.ddText($, "Data 1. wyd. pol."),
+      $('dt[title*="Data pierwszego wydania"]').first().next("dd").text(),
+      this.ddText($, "Data 1. wydania"),
+      this.ddText($, "Data wydania"),
+      typeof book.datePublished === "string" ? book.datePublished : "",
+    ];
+    for (const candidate of candidates) {
+      const text = String(candidate || "").trim();
+      if (!text) continue;
+      const date = new Date(text);
+      if (!isNaN(date.getTime())) return date;
+    }
+    return null;
+  }
+
+  // The value after the first <dt> whose text starts with `label`.
+  ddText($, label) {
+    return $("dt")
+      .filter((i, el) => $(el).text().trim().startsWith(label))
+      .first()
       .next("dd")
       .text()
       .trim();
-    return dateText ? new Date(dateText) : null;
+  }
+
+  // The page's schema.org Book/Audiobook JSON-LD node, or {}.
+  bookJsonLd($) {
+    let found = {};
+    $('script[type="application/ld+json"]').each((i, el) => {
+      try {
+        const nodes = [].concat(JSON.parse($(el).html() || ""));
+        for (const node of nodes) {
+          const types = [].concat((node && node["@type"]) || []).join(" ");
+          if (/Book|Audiobook/i.test(types)) found = node;
+        }
+      } catch (e) {
+        // Not valid JSON: skip it
+      }
+    });
+    return found;
+  }
+
+  // No cover for the site's stand-ins (its logo, "default-book"); https for the rest.
+  realCover(url) {
+    if (!url || /default-book|lc-logo/.test(url)) return "";
+    return url.replace(/^http:\/\//, "https://");
+  }
+
+  // An ISBN-10 or ISBN-13 without hyphens, or "".
+  validIsbn(value) {
+    const isbn = String(value || "").replace(/[^0-9Xx]/g, "").toUpperCase();
+    return /^(97[89]\d{10}|\d{9}[\dX])$/.test(isbn) ? isbn : "";
   }
 
   extractPages($) {
@@ -466,7 +554,7 @@ class LubimyCzytacProvider {
   }
 
   enrichDescription(description, pages, publishedDate, translator) {
-    let enrichedDescription = this.stripHtmlTags(description);
+    let enrichedDescription = this.stripHtmlTags(description).trim();
 
     if (enrichedDescription === "Ta książka nie posiada jeszcze opisu.") {
       enrichedDescription = "Brak opisu.";

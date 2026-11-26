@@ -20,6 +20,7 @@ Docker hub page: https://hub.docker.com/r/lakafior/lubimyczytac-abs
 ## Fetching features:
 - Cover
 - Title
+- Original title (informational; omitted for Polish-original books)
 - Author
 - Description (without html blocks)
 - Publisher

@@ -352,8 +352,13 @@ class LubimyCzytacProvider {
 
       const translator = this.extractTranslator($);
 
+      // The original title is the only field that links a translated edition
+      // to the work it came from (e.g. "Bratobójca" -> "Kinslayer").
+      const originalTitle = this.extractOriginalTitle($);
+
       const fullMetadata = {
         ...match,
+        originalTitle,
         cover,
         description: this.enrichDescription(
           description,
@@ -526,6 +531,12 @@ class LubimyCzytacProvider {
     return null;
   }
 
+  extractOriginalTitle($) {
+    const value = $('dt:contains("Tytuł oryginału")').next("dd").first().text();
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    return text || null;
+  }
+
   extractTranslator($) {
     return (
       $('dt:contains("Tłumacz:")').next("dd").find("a").text().trim() || null
@@ -620,6 +631,7 @@ app.get("/search", async (req, res) => {
           author: book.authors.join(", "),
           narrator: book.narrator || undefined,
           publisher: book.publisher || undefined,
+          originalTitle: book.originalTitle || undefined,
           publishedYear: publishedYear,
           description: book.description || undefined,
           cover: book.cover || undefined,

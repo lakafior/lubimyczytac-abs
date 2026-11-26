@@ -7,6 +7,7 @@ const NodeCache = require("node-cache");
 
 const app = express();
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || "0.0.0.0";
 const cache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
 
 app.use(cors());
@@ -670,6 +671,6 @@ app.get("/search", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`LubimyCzytac provider listening on port ${port}`);
+app.listen(port, host, () => {
+  console.log(`LubimyCzytac provider listening on ${host}:${port}`);
 });
